@@ -42,8 +42,9 @@ Fill this in as the milestones land; keep it to what works today.
 
 ```
 uv sync --group dev              # install (the SessionStart hook does this on the web)
-uv run pytest -q                 # the suite, < 1 s
+uv run pytest -q                 # the suite, < 1 s, fixture only
 uv run ck3chronicle --version    # the CLI (no subcommands yet)
+uv run python -m ck3chronicle.core.runs verify saves --json saves/runs.json   # group real saves into runs
 uv build                         # sdist + wheel into dist/, as the release workflow does
 ```
 
@@ -52,7 +53,8 @@ Linux under a non-UTF-8 locale, and installs the built wheel outside the tree.
 Publishing a GitHub release tagged `v<version>` uploads to PyPI through trusted
 publishing (`release.yml`, environment `pypi`); the owner connects it on PyPI.
 `tests/test_layering.py` enforces the dependency direction and that nothing
-imports Neo4j.
+imports Neo4j. `tests/fixtures/gamestate_sample.txt` is the POC's byte for byte
+(a test pins its SHA-256; `.gitattributes` keeps Windows from converting it).
 
 ## Process
 
