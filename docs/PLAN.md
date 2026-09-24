@@ -76,10 +76,13 @@ Porting must not change a single page. The reference is the POC's own output:
 1. The POC session tags a Ck-parser commit `poc-reference-1` and attaches
    `site-sha256.txt` to a release of that tag: one line per generated file,
    `sha256  path`, for a build of the five release saves.
-2. Here, a check builds the same five saves and compares. **Identical, apart
-   from the configured URLs** (the page footer, the landing page's companion
-   link, `portraits.json`'s `docs` block), which it normalises before hashing.
-3. Until the tag exists, `docs/HANDOVER.md` names the commit to use.
+2. Here, `scripts/parity.sh` builds the same five saves with
+   `scripts/parity.toml`, which configures the POC's own links (the page
+   footer, the landing page's companion link, `portraits.json`'s `docs`
+   block), and checks every file with `sha256sum -c`. **Byte-identical, with
+   no normalisation**: the links differ from the POC's only when configured to.
+3. A later reference (`poc-reference-2`, …) replaces the tag in
+   `PARITY_REFERENCE`, and `docs/HANDOVER.md` names the one in force.
 
 The saves: `SAVES_REPO=diegoami/ck_wiki` with the POC's `scripts/fetch_saves.sh`
 (~330 MB, into a git-ignored `saves/`).

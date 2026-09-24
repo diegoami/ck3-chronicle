@@ -75,7 +75,7 @@ def list_assets(repository: str, token: str | None = None, opener: Opener = urll
         try:
             with opener(_request(url, token, "application/vnd.github+json")) as response:
                 releases = json.load(response)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:  # unreachable, or not JSON (a proxy's page)
             raise FetchError(f"cannot list the releases of {repository}: {exc}") from None
         if not isinstance(releases, list):
             raise FetchError(f"unexpected answer listing the releases of {repository}")

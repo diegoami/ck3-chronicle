@@ -78,3 +78,12 @@ def test_no_saves_and_no_repository_are_errors(tmp_path):
         fetch_saves("someone/saves", tmp_path, token="", opener=FakeGitHub([], {}))
     with pytest.raises(FetchError, match="owner/name"):
         fetch_saves("saves", tmp_path, token="")
+
+
+def test_a_listing_that_is_not_json_is_a_fetch_error(tmp_path):
+    # a proxy's or an outage's HTML page answers 200 as readily as the API
+    def opener(request):
+        return io.BytesIO(b"<html>rate limited</html>")
+
+    with pytest.raises(FetchError, match="cannot list the releases of someone/saves"):
+        fetch_saves("someone/saves", tmp_path, token="", opener=opener)

@@ -58,9 +58,10 @@ not delivered yet included (schema `ck3-images/3`):
     `character`, `role` (`ever-holder`, `kin` or `titled-kin`: why they have a
     page, so a harvest can take rulers first), `sex`, `birth`, `house`, `page`
     and `have`.
-  - `kind: "arms"` entries carry `file`, `coat_of_arms_id`, `page`, `borne_by`,
-    `title` or `house`, `have`, and `definition`, the recipe itself (pattern,
-    colours, emblems), so arms can be drawn without the game.
+  - `kind: "arms"` entries carry `file`, `save` and `checksum` (the save the
+    recipe was read from), `coat_of_arms_id`, `page`, `borne_by`, `title` or
+    `house`, `have`, and `definition`, the recipe itself (pattern, colours,
+    emblems), so arms can be drawn without the game.
 - `have` is one build's answer, not a promise. The file's absence is the
   truth.
 - **Every portrait entry is someone alive in that save**: in `living` and
