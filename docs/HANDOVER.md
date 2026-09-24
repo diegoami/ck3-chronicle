@@ -16,9 +16,16 @@ continue without the conversation history.
 
 ## State
 
-- **Nothing is built yet.** The repository holds the license, this handover,
-  the plan, `CLAUDE.md`, the review skill and a SessionStart hook that does
-  nothing until `pyproject.toml` exists.
+- **M1, the skeleton** (#1): `src/ck3chronicle/` with empty `core/` and `wiki/`,
+  a CLI that only answers `--version`, `pyproject.toml` (hatchling, no runtime
+  dependencies, extra `maps`, dev group), `uv.lock`, CI on Linux + Windows +
+  a non-UTF-8 locale, a wheel check, and a release workflow for PyPI trusted
+  publishing. The version is `0.1.0.dev0`; M4 makes it `0.1.0`.
+- **PyPI trusted publishing is not connected yet.** Only the owner can: on
+  PyPI, a pending publisher for project `ck3-chronicle`, owner `diegoami`,
+  repository `ck3-chronicle`, workflow `release.yml`, environment `pypi`
+  (and the `pypi` environment on GitHub, optionally with a required reviewer).
+  Until then a published release fails at the upload step and uploads nothing.
 - **The parity reference** (`docs/PLAN.md` §5) is not tagged yet. The POC session
   tags `poc-reference-1` on Ck-parser once its realm-map PR (Ck-parser#50) is
   merged, and attaches `site-sha256.txt`. Until then, M3's comparison is
@@ -26,8 +33,9 @@ continue without the conversation history.
 
 ## Next
 
-**M1 (#1): the skeleton.** Then M2 (#2), porting the core free of Neo4j.
+**M2 (#2): the core ported, free of Neo4j.** Then M3 (#3).
 
 ## Done
 
 - 2026-09-24: repository created, with the plan, the rules and milestone issues.
+- 2026-09-24: M1, the skeleton (#1).
