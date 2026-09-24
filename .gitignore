@@ -1,0 +1,17 @@
+# Save files and what is built from them are never committed.
+*.ck3
+gamestate
+saves/
+site/
+images/
+prose/
+.ck3cache/
+
+.env
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
