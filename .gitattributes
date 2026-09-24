@@ -1,0 +1,2 @@
+# The fixture is the POC's, byte for byte: never convert its line endings.
+tests/fixtures/** -text
