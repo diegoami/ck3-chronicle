@@ -90,3 +90,37 @@ def make_save(
         text = text.replace(old, new)
     meta, gamestate = split_meta(text)
     return write_save(path, meta, gamestate)
+
+
+# ------------------------------------------------ the POC's commands, here
+#
+# The POC's tests call ``ck3wiki.build.main``, ``ck3wiki.queue.main`` and
+# ``ck3wiki.prose.main`` with their own argument lists. These run the same
+# thing through ``ck3chronicle``, so the ported tests keep their bodies.
+
+
+def build_main(argv: list[str]) -> int:
+    """``python -m ck3wiki.build SAVES --out OUT [...]`` as ``ck3chronicle build SAVES OUT [...]``."""
+    from ck3chronicle.cli import main
+
+    args = list(argv)
+    saves = args.pop(0)
+    out = "site"
+    if "--out" in args:
+        i = args.index("--out")
+        out = args[i + 1]
+        del args[i : i + 2]
+    args = ["--images" if a == "--portraits" else a for a in args]
+    return main(["build", saves, out, *args])
+
+
+def queue_main(argv: list[str]) -> int:
+    from ck3chronicle.cli import main
+
+    return main(["queue", *argv])
+
+
+def prose_main(argv: list[str]) -> int:
+    from ck3chronicle.cli import main
+
+    return main(["prose", *argv])

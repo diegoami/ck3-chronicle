@@ -76,25 +76,38 @@ Porting must not change a single page. The reference is the POC's own output:
 1. The POC session tags a Ck-parser commit `poc-reference-1` and attaches
    `site-sha256.txt` to a release of that tag: one line per generated file,
    `sha256  path`, for a build of the five release saves.
-2. Here, a check builds the same five saves and compares. **Identical, apart
-   from the configured URLs** (the page footer, the landing page's companion
-   link, `portraits.json`'s `docs` block), which it normalises before hashing.
-3. Until the tag exists, `docs/HANDOVER.md` names the commit to use.
+2. Here, `scripts/parity.sh` builds the same five saves with
+   `scripts/parity.toml`, which configures the POC's own links (the page
+   footer, the landing page's companion link, `portraits.json`'s `docs`
+   block), and checks every file with `sha256sum -c`. **Byte-identical, with
+   no normalisation**: the links differ from the POC's only when configured to.
+3. A later reference (`poc-reference-2`, …) replaces the tag in
+   `PARITY_REFERENCE`, and `docs/HANDOVER.md` names the one in force.
 
 The saves: `SAVES_REPO=diegoami/ck_wiki` with the POC's `scripts/fetch_saves.sh`
 (~330 MB, into a git-ignored `saves/`).
 
 ## 6. Configuration
 
-`ck3chronicle.toml`, every key optional:
+`ck3chronicle.toml`, every key optional, an unknown key an error (built in M3;
+the full shape is in `src/ck3chronicle/config.py`'s docstring):
 
-- site: name, the repository URL shown in the footer, the companion's link
-  (none by default), the image-queue `docs` links;
-- runs: a subject title per run (else the played character's primary title);
-- reach: family, kin, siblings, titled kin (the POC's `--no-*` flags);
-- images: where delivered portraits and maps are read from;
-- prose: backend, URL, model; the key only ever from the environment;
-- maps: the game directory (else found where Steam installs it).
+- `[site]`: the footer's generator name and URL, the companion's name and link
+  (none by default), and `[site.docs]`, the `portraits.json` `docs` links (by
+  default the product's own `docs/IMAGES.md`, and no `images` link);
+- `[saves] repository`: whose Releases `ck3chronicle fetch` reads;
+- `[runs]`: a subject title for every run, and `[runs.titles]` per run (else
+  the played character's primary title);
+- `[reach]`: vassals, family, kin, siblings, titled kin (the POC's `--no-*` flags);
+- `[images] dir`: where delivered portraits, arms and maps are read from;
+- `[cache] dir`: the per-save character digests;
+- `[prose]`: its directory, backend, URL, model and user agent; the key only
+  ever from the environment (`CK3_PROSE_API_KEY`), as is a GitHub token;
+- maps (M7): the game directory, else found where Steam installs it. **Game
+  files are used only for saves of the same game version** (Ck-parser#58,
+  owner's decision: strict, no override): the install's `rawVersion` in
+  `launcher/launcher-settings.json` must equal the run's `version`, or that
+  run gets no map and no game text.
 
 ## 7. Milestones
 
@@ -120,5 +133,12 @@ One issue each; one PR or a few each, under the review rule.
 - **A build reads ~1.1 GB at peak** and takes ~4½ minutes cold, ~1½ warm, for five
   saves in three runs; the per-save cache is 43 MB, the site 125 MB. The
   desktop builds one chronicle at a time and shows progress.
+- **Game data drifts between patches** (provinces renumbered, baronies added,
+  text rewritten), so output drawn from another version's files can look right
+  and be wrong. A player's install is usually the latest patch, so older
+  playthroughs get no maps or game text: the desktop says which chronicles its
+  game can serve. Unverified, and to settle before M7: whether a save's
+  `version` is the version that wrote it or the one its run started on
+  (Ck-parser PLAN.md §5).
 - **The owner's review loop catches real defects** (a wrong figure, an
   order-dependent rank, a Windows-only crash, a vanished save): budget for it.

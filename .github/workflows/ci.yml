@@ -19,7 +19,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-      - run: uv sync --locked --group dev
+      - run: uv sync --locked --group dev --extra maps
       - run: uv run pytest -q
       - name: Again with a default encoding that is not UTF-8, as Windows' is
         if: runner.os == 'Linux'
