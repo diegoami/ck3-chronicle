@@ -41,9 +41,18 @@ Read `docs/HANDOVER.md` first (state, next milestone), then the part of
 Fill this in as the milestones land; keep it to what works today.
 
 ```
-uv sync --group dev              # install
-uv run pytest -q                 # the suite
+uv sync --group dev              # install (the SessionStart hook does this on the web)
+uv run pytest -q                 # the suite, < 1 s
+uv run ck3chronicle --version    # the CLI (no subcommands yet)
+uv build                         # sdist + wheel into dist/, as the release workflow does
 ```
+
+CI (`.github/workflows/ci.yml`) runs the suite on Linux and Windows, again on
+Linux under a non-UTF-8 locale, and installs the built wheel outside the tree.
+Publishing a GitHub release tagged `v<version>` uploads to PyPI through trusted
+publishing (`release.yml`, environment `pypi`); the owner connects it on PyPI.
+`tests/test_layering.py` enforces the dependency direction and that nothing
+imports Neo4j.
 
 ## Process
 
