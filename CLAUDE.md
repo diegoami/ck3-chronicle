@@ -15,8 +15,9 @@ Read `docs/HANDOVER.md` first (state, next milestone), then the part of
   pushes, pull requests and issues happen here and nowhere else.
 - **`diegoami/Ck-parser` is the reference, read-only.** It is the proof of
   concept: every behaviour, rule and figure here comes from it. Clone it
-  next to this checkout and **never commit, push, branch, comment or open issues
-  there**:
+  next to this checkout, **into its own directory**: on the owner's machine
+  `../Ck-parser` is another session's working copy, which switches branches.
+  **Never commit, push, branch, comment or open issues there**:
 
   ```
   git clone https://github.com/diegoami/Ck-parser ../ck-parser-reference
