@@ -48,7 +48,7 @@ continue without the conversation history.
 |---|---|
 | `test_{parser,container,cultures,digest,dynasties,family,filter,fingerprint,realm,runs,titles,vassalage}.py` | same names, as they were, imports renamed |
 | `test_digest.py::test_a_cached_build_renders_exactly_what_an_uncached_one_does` | **M3**: it runs the wiki build |
-| `test_pipeline.py` | `test_snapshot.py`: its non-graph parts (`gather`, `lineage`, `collect_characters`, `resolve_saves`), checked on the view instead of through Cypher |
+| `test_pipeline.py` | `test_snapshot.py`: its non-graph parts (`gather`, `lineage`, `collect_characters`, `resolve_saves`), checked on the view instead of through Cypher. Its three checks between snapshots (changed history, changed death date, `--no-check`) go with `consistency`, later; the rest is the graph load, the add-on's |
 | `test_graph.py` | `test_history.py` (`holder_intervals`, plus the tenure a later snapshot closes) and `test_population.py` (`stream_people`, `character_props`); the Cypher, config and schema tests stay with the graph add-on |
 | `test_handoff.py` | not ported (retired, Ck-parser#27); its two `living_characters` tests are in `test_characters.py` |
 | `test_wiki.py`, `test_prose.py`, `test_queue.py` | **M3**. `LEAVES_AND_PASSES` and `VANISHES` moved from `test_wiki.py` to `helpers.py` (`test_realm.py` needs them) |
