@@ -19,7 +19,7 @@ Read `docs/HANDOVER.md` first (state, next milestone), then the part of
   there**:
 
   ```
-  git clone https://github.com/diegoami/Ck-parser ../Ck-parser
+  git clone https://github.com/diegoami/Ck-parser ../ck-parser-reference
   ```
 
   Read its `CLAUDE.md` (the rules), `docs/PLAN.md` (the verified facts about the

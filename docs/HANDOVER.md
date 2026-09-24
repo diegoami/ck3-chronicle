@@ -10,7 +10,7 @@ continue without the conversation history.
 | rules, scope, process | `CLAUDE.md` |
 | the plan: decisions, layout, porting map, parity, milestones | `docs/PLAN.md` |
 | milestones | issues #1–#7, label `milestone` |
-| the reference (read-only) | diegoami/Ck-parser, cloned to `../Ck-parser` |
+| the reference (read-only) | diegoami/Ck-parser, cloned to `../ck-parser-reference` (not `../Ck-parser`: another session works there) |
 | the saves | ck_wiki's Releases, via Ck-parser's `scripts/fetch_saves.sh` |
 | the published wiki (the POC's) | diegoami/ck_wiki |
 
