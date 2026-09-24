@@ -1,0 +1,16 @@
+# The POC reference's own links (Ck-parser poc-reference-1, reference.json):
+# with these, a build of the five release saves matches its site-sha256.txt
+# byte for byte, no normalisation needed (docs/PLAN.md §5).
+
+[site]
+generator_name = "Ck-parser"
+generator_url = "https://github.com/diegoami/Ck-parser"
+companion_url = "https://github.com/diegoami/ck_portrait_generator"
+
+[site.docs]
+names = "https://github.com/diegoami/Ck-parser/blob/main/docs/COMPANION_PROPOSAL.md#the-rule"
+contract = "https://github.com/diegoami/Ck-parser/blob/main/docs/COMPANION_PROPOSAL.md"
+images = "https://github.com/diegoami/ck_wiki/tree/main/images"
+
+[saves]
+repository = "diegoami/ck_wiki"

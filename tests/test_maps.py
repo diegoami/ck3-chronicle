@@ -1,0 +1,105 @@
+import pytest
+
+np = pytest.importorskip("numpy")
+Image = pytest.importorskip("PIL.Image")
+
+from ck3chronicle.core.naming import realm_map_name  # noqa: E402
+from ck3chronicle.core.titles import build_index  # noqa: E402
+from ck3chronicle.wiki.maps import PALETTE, GameMap, province_classes, render  # noqa: E402
+from helpers import make_save  # noqa: E402
+
+#: three baronies: b_one in c_test (held by a direct vassal of 200), b_two in
+#: c_far (a vassal's vassal), b_three in d_empty -- a duchy, so no county and
+#: no realm. Indices 5-7 follow c_far, the fixture's last title.
+BARONIES = ((
+    "\tde_jure_liege=1\n\tde_facto_liege=2\n}\n",
+    "\tde_jure_liege=1\n\tde_facto_liege=2\n}\n"
+    '5={\n\tkey="b_one"\n\tholder=201\n\tde_jure_liege=2\n\tde_facto_liege=2\n}\n'
+    '6={\n\tkey="b_two"\n\tholder=202\n\tde_jure_liege=4\n\tde_facto_liege=4\n}\n'
+    '7={\n\tkey="b_three"\n\tde_jure_liege=1\n}\n',
+),)
+
+#: province id -> its colour in provinces.png; 4 is sea, 5 belongs to no barony
+COLOURS = {1: (10, 0, 0), 2: (20, 0, 0), 3: (30, 0, 0), 4: (40, 0, 0), 5: (50, 0, 0)}
+
+
+def game_dir(tmp_path):
+    root = tmp_path / "game"
+    (root / "map_data").mkdir(parents=True)
+    (root / "common" / "landed_titles").mkdir(parents=True)
+    raster = np.array([[COLOURS[p] for p in (1, 2, 3, 4, 5)]] * 2, dtype=np.uint8)
+    Image.fromarray(raster).save(root / "map_data" / "provinces.png")
+    (root / "map_data" / "definition.csv").write_text(
+        "0;0;0;0;x;x;\n" + "".join(f"{p};{r};{g};{b};P{p};x;\n" for p, (r, g, b) in COLOURS.items()),
+        encoding="utf-8",
+    )
+    (root / "map_data" / "default.map").write_text("sea_zones = LIST { 4 }\n", encoding="utf-8")
+    (root / "common" / "landed_titles" / "00_test.txt").write_text(
+        "k_x = {\n\td_x = {\n\t\tc_x = {\n"
+        "\t\t\tb_one = {\n\t\t\t\tprovince = 1\n\t\t\t}\n"
+        "\t\t\tb_two = {\n\t\t\t\tprovince = 2\n\t\t\t\tcolor = { 1 2 3 }\n\t\t\t}\n"
+        "\t\t\tb_three = { province = 3 }\n"
+        "\t\t}\n\t}\n}\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_each_province_is_coloured_by_its_countys_rank(tmp_path):
+    game = GameMap.load(game_dir(tmp_path))
+    assert game.barony_province == {"b_one": 1, "b_two": 2, "b_three": 3} and game.water == {4}
+    index = build_index(str(make_save(tmp_path / "a.ck3", edits=BARONIES)))
+    classes, cover = province_classes(game, index, 200)
+    # c_test is a direct vassal's, c_far a vassal's vassal's, d_empty no county
+    assert classes == {1: 1, 2: 2, 3: "outside"}
+    assert (cover.baronies, cover.placed, cover.unplaced) == (3, 3, [])
+
+    pixels = np.asarray(render(game, classes, scale=1, crop=False))[0]
+    assert [tuple(px) for px in pixels] == [
+        PALETTE[1], PALETTE[2], PALETTE["outside"], PALETTE["sea"], PALETTE["waste"],
+    ]
+
+
+def test_a_province_is_found_past_nested_blocks_and_comments():
+    # b_pockington and b_leeds open with cultural_names = { ... }, which a flat
+    # pattern could not cross; a nested block's own `province` does not count
+    from ck3chronicle.wiki.maps import barony_provinces
+
+    text = (
+        "b_a = {\n\tcultural_names = {\n\t\tname_list_x = cn_a  # a comment { with a brace\n\t}\n"
+        "\tprovince = 7\n}\n"
+        "b_b = {\n\tholding = { province = 99 }\n\tprovince = 8\n}\n"
+        "# b_c = { province = 9 }\n"
+    )
+    assert barony_provinces(text) == {"b_a": 7, "b_b": 8}
+
+
+def test_a_barony_the_map_does_not_know_is_reported_not_guessed(tmp_path):
+    root = game_dir(tmp_path)
+    (root / "common" / "landed_titles" / "00_test.txt").write_text("b_one = { province = 1 }\n", encoding="utf-8")
+    index = build_index(str(make_save(tmp_path / "a.ck3", edits=BARONIES)))
+    classes, cover = province_classes(GameMap.load(root), index, 200)
+    assert classes == {1: 1} and cover.unplaced == ["b_two", "b_three"]
+
+
+def test_the_realm_section_links_the_map_whether_or_not_it_is_there(tmp_path):
+    from ck3chronicle.wiki.model import build_wiki
+    from ck3chronicle.wiki.render import write_site
+    from test_wiki import views
+
+    save = make_save(tmp_path / "a.ck3", edits=BARONIES)
+    wiki = build_wiki(views(save), "k_testland")
+    name = realm_map_name(save, "k_testland")
+    assert wiki.wanted_maps == [name]
+    site = tmp_path / "site"
+    write_site(wiki, site)
+    page = (site / "titles" / "k_testland.html").read_text(encoding="utf-8")
+    assert f'src="../portraits/{name}"' in page and "shot map awaited" in page
+
+    # delivered, the next build copies it in and it is no longer awaited
+    images = tmp_path / "images"
+    images.mkdir()
+    (images / name).write_bytes(b"png")
+    write_site(wiki, site, images)
+    assert (site / "portraits" / name).is_file()
+    assert "shot map awaited" not in (site / "titles" / "k_testland.html").read_text(encoding="utf-8")

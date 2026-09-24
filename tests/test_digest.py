@@ -111,6 +111,37 @@ def test_the_header_carries_the_schema_so_it_can_be_thrown_away(tmp_path):
     assert not path.with_suffix(".part").exists()
 
 
+def test_a_cached_build_renders_exactly_what_an_uncached_one_does(tmp_path, caplog):
+    """The only thing a cache may change is how long it took."""
+    import logging
+
+    from ck3chronicle.api import build
+    from ck3chronicle.config import Config
+
+    early = make_save(tmp_path / "a_1100.ck3", date="1100.6.1", seed=7, random_count=100)
+    late = make_save(tmp_path / "b_1120.ck3", date="1120.1.1", seed=7, random_count=200)
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    for path in (early, late):
+        (saves / path.name).write_bytes(path.read_bytes())
+
+    build(saves, tmp_path / "cold", Config(title="k_testland", cache=None))
+    build(saves, tmp_path / "warm", Config(title="k_testland", cache=tmp_path / "cache"))
+    # and again, now that every save is already digested
+    caplog.set_level(logging.INFO, logger="ck3chronicle")
+    build(saves, tmp_path / "warmer", Config(title="k_testland", cache=tmp_path / "cache"))
+
+    def pages(root):
+        return {
+            p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+            for p in sorted(root.rglob("*")) if p.is_file()
+        }
+
+    assert pages(tmp_path / "cold") == pages(tmp_path / "warm")
+    assert pages(tmp_path / "warm") == pages(tmp_path / "warmer")
+    assert caplog.text.count("cached:") == 2  # the third build's reads
+
+
 def test_the_first_section_wins_the_way_a_save_search_does(tmp_path):
     # find_characters searches living, then dead_unprunable, then dead_prunable
     # and keeps the first hit; a dict built the other way round would silently

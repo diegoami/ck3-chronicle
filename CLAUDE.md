@@ -41,12 +41,22 @@ Read `docs/HANDOVER.md` first (state, next milestone), then the part of
 Fill this in as the milestones land; keep it to what works today.
 
 ```
-uv sync --group dev              # install (the SessionStart hook does this on the web)
-uv run pytest -q                 # the suite, < 1 s, fixture only
-uv run ck3chronicle --version    # the CLI (no subcommands yet)
+uv sync --group dev --extra maps # install (the SessionStart hook does this on the web)
+uv run pytest -q                 # the suite, ~2 s, fixture only
+uv run ck3chronicle build saves site              # the wiki; settings from ./ck3chronicle.toml
+uv run ck3chronicle build saves site --no-family  # ... fast: skips the full character pass
+uv run ck3chronicle fetch saves --repo diegoami/ck_wiki   # the release saves, ~330 MB, git-ignored
+uv run ck3chronicle queue ids site/portraits.json --out ids   # the harvester's --ids-file per save
+uv run ck3chronicle prose saves --out prose       # rulers' prose, template backend
+scripts/parity.sh                                 # M3's acceptance test: ~4 min, the five saves
 uv run python -m ck3chronicle.core.runs verify saves --json saves/runs.json   # group real saves into runs
 uv build                         # sdist + wheel into dist/, as the release workflow does
 ```
+
+`scripts/parity.toml` holds the POC's own links: with it, a build of the five
+release saves is byte-identical to `poc-reference-1` (`scripts/parity.sh`
+fetches, builds and checks all 25 133 files). Run it after any change to
+`core` or `wiki` that could touch a page.
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux and Windows, again on
 Linux under a non-UTF-8 locale, and installs the built wheel outside the tree.
