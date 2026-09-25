@@ -186,38 +186,64 @@ def test_a_failed_build_is_a_sentence_not_a_traceback(tmp_path):
 # ---------------------------------------------------------------- the entry point
 
 
-def test_smoke_builds_without_a_window(tmp_path, monkeypatch):
-    pytest.importorskip("tkinter")
-    monkeypatch.setattr(paths, "cache_dir", lambda **kw: tmp_path / "appcache")
-    monkeypatch.setattr(paths, "config_path", lambda **kw: tmp_path / "none.toml")
-    try:
-        import tkinter
+def test_smoke_opens_the_window_then_builds(tmp_path):
+    """In its own process, as the .exe runs it: one Tk per process, as in the app."""
+    import os
+    import subprocess
+    import sys
 
-        tkinter.Tk().destroy()
-    except tkinter.TclError as exc:
-        pytest.skip(f"no display for Tk: {exc}")
+    pytest.importorskip("tkinter")
     saves = saves_folder(tmp_path)
-    assert main(["--smoke", str(saves), str(tmp_path / "out")]) == 0
+    env = {**os.environ}
+    for var in ("LOCALAPPDATA", "APPDATA", "XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
+        env[var] = str(tmp_path / "appdata" / var)
+    env["HOME"] = str(tmp_path / "home")
+
+    def smoke(*args):
+        return subprocess.run(
+            [sys.executable, "-m", "ck3chronicle.gui", "--smoke", *map(str, args)],
+            env=env, capture_output=True, text=True, encoding="utf-8", timeout=120,
+        ).returncode
+
+    if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        pytest.skip("no display for Tk")  # never a Tk in this process: the window tests share one
+    assert smoke(saves, tmp_path / "out") == 0
     assert (tmp_path / "out" / "index.html").is_file()
-    assert main(["--smoke", str(tmp_path / "nope"), str(tmp_path / "out2")]) == 1
+    assert smoke(tmp_path / "nope", tmp_path / "out2") == 1
 
 
 # ---------------------------------------------------------------- the window
 
 
-@pytest.fixture
-def root():
+@pytest.fixture(scope="session")
+def tk_root():
+    """One Tk interpreter for the whole session, as the app has one per process.
+
+    On Windows a second ``Tk()`` after the first is destroyed cannot find its
+    Tcl library ("Can't find a usable init.tcl"), so every window test shares
+    this one and gets its own Toplevel.
+    """
     tkinter = pytest.importorskip("tkinter")
     try:
-        window = tkinter.Tk()
+        root = tkinter.Tk()
     except tkinter.TclError as exc:
         pytest.skip(f"no display for Tk: {exc}")
+    root.withdraw()
+    yield root
+    root.destroy()
+
+
+@pytest.fixture
+def root(tk_root):
+    import tkinter
+
+    window = tkinter.Toplevel(tk_root)
     window.withdraw()
     yield window
     try:
         window.destroy()
     except tkinter.TclError:
-        pass
+        pass  # the test closed it
 
 
 def test_the_window_lists_ticks_builds_and_opens(tmp_path, root, monkeypatch):
