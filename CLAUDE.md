@@ -48,6 +48,9 @@ uv run ck3chronicle build saves site --no-family  # ... fast: skips the full cha
 uv run ck3chronicle fetch saves --repo diegoami/ck_wiki   # the release saves, ~330 MB, git-ignored
 uv run ck3chronicle queue ids site/portraits.json --out ids   # the harvester's --ids-file per save
 uv run ck3chronicle prose saves --out prose       # rulers' prose, template backend
+uv run ck3chronicle gui                           # the desktop window (Tk)
+uv run ck3chronicle-gui --smoke SAVES OUT         # the window opened and closed, then a headless build: CI's .exe check
+uv sync --group desktop && uv run pyinstaller --onefile --windowed --copy-metadata ck3-chronicle packaging/desktop.py   # the .exe (Windows)
 scripts/parity.sh                                 # M3's acceptance test: ~4 min, the five saves
 uv run python -m ck3chronicle.core.runs verify saves --json saves/runs.json   # group real saves into runs
 uv build                         # sdist + wheel into dist/, as the release workflow does
@@ -59,7 +62,10 @@ fetches, builds and checks all 25 133 files). Run it after any change to
 `core` or `wiki` that could touch a page.
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux and Windows, again on
-Linux under a non-UTF-8 locale, and installs the built wheel outside the tree.
+Linux under a non-UTF-8 locale, installs the built wheel outside the tree, and
+builds the Windows `.exe` and runs it with `--smoke` (artifact
+`ck3-chronicle-windows` on every PR). The Tk window tests run on Windows and
+skip where there is no display. Only `gui/` may import `tkinter`.
 Publishing a GitHub release tagged `v<version>` uploads to PyPI through trusted
 publishing (`release.yml`, environment `pypi`); the owner connects it on PyPI.
 `tests/test_layering.py` enforces the dependency direction and that nothing

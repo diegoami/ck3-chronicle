@@ -46,6 +46,14 @@ continue without the conversation history.
   (`core.container.UNREADABLE`: ironman/binary, truncated, bad zip, not the
   save format), log a warning, and list it in `Result.skipped`. This is the
   one place `core` diverges from the POC's behaviour; the POC has the bug.
+- **M6, the desktop edition** (#6): `gui/` (`paths`: default folders per
+  platform, Documents from the Windows Known Folder API; `session`: the
+  playthrough list, remembered choices, the build job on a worker thread,
+  no Tk; `app`: the Tk widgets). `api.build` gained `run_ids=[...]` and
+  `cancel=` (an Event checked at each progress step, raising `Cancelled`).
+  Entry points: `ck3chronicle gui`, the `ck3chronicle-gui` gui-script, and
+  `packaging/desktop.py` for PyInstaller. CI builds a one-file windowed
+  `.exe` (~12 MB), runs `--smoke`, and uploads it; a release attaches it.
 - **Maps have no command yet**: the drawing is ported, the command that renders
   a run's maps comes in M7 with the game-version rule (Ck-parser#58; the rule
   is on #7 and in `docs/PLAN.md` §6, §8).
@@ -79,10 +87,10 @@ continue without the conversation history.
 
 ## Next
 
-**M6 (#6): the desktop edition.** Design on #6 (D1–D5, defaults taken);
-library change (a), skipping unreadable saves, is done. Next: (b)
-`build(run_ids=[...])`, (c) a cancel hook, and `gui/`, in one PR.
-
+**M6 (#6): the desktop edition**, PR #17, stacked on #15. The design on #6
+was reviewed (AGREE; #16 taken: `--smoke` opens the real window). What only
+the owner can do: run the `.exe` artifact on a clean Windows machine (the
+PR's checklist).
 
 **M4 (#4): 0.1.0 on PyPI, and ck_wiki runs on it.** Needs the owner: the
 trusted publisher on PyPI, and a go before anything writes to ck_wiki.
@@ -103,3 +111,4 @@ Ck-parser#51 (a DLC toggled mid-run keeps a playthrough whole), so
 - 2026-09-24: M3, the wiki, `build()` and configuration, at parity with `poc-reference-1` (#3).
 - 2026-09-25: caught up with Ck-parser#51, a DLC toggled mid-run (grouping only; parity unchanged).
 - 2026-09-25: an unreadable save is skipped with a warning, not fatal (M6 design, D1).
+- 2026-09-25: M6, the desktop edition (#6), up for review.

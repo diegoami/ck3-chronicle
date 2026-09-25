@@ -18,14 +18,25 @@ from pathlib import Path
 
 
 def smoke(saves: str, out: str) -> int:
+    """Open the real window on `saves`, close it, then build into `out`.
+
+    The window is built and drawn, not just a Tk root: a bundle missing Tcl/Tk
+    data, a ttk theme or a widget module fails here (#16).
+    """
     import tkinter
 
-    root = tkinter.Tk()  # Tk must be bundled and start
-    root.withdraw()
-    root.destroy()
     from .. import api
     from . import session
+    from .app import App
 
+    root = tkinter.Tk()
+    root.withdraw()
+    window = App(root, session.Settings(Path(saves), Path(out)))
+    root.update()
+    listed = len(window.tree.get_children())
+    root.destroy()
+    if not listed:
+        return 1
     result = api.build(Path(saves), Path(out), session.desktop_config())
     return 0 if result.chronicles and (Path(out) / "index.html").is_file() else 1
 
