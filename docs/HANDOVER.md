@@ -40,6 +40,12 @@ continue without the conversation history.
   release saves with `scripts/parity.toml` (the POC's own links) and all
   25 133 files match `poc-reference-1`'s `site-sha256.txt`, with no
   normalisation (3 min 31 s cold, 1 min 14 s warm, 1.1 GB peak).
+- **An unreadable save is skipped, not fatal** (M6 design, D1): `runs.scan`
+  takes a `skipped` list (without one it raises, as the POC's does), and
+  `api.discover`/`load_run` leave out a file that is not a readable save
+  (`core.container.UNREADABLE`: ironman/binary, truncated, bad zip, not the
+  save format), log a warning, and list it in `Result.skipped`. This is the
+  one place `core` diverges from the POC's behaviour; the POC has the bug.
 - **Maps have no command yet**: the drawing is ported, the command that renders
   a run's maps comes in M7 with the game-version rule (Ck-parser#58; the rule
   is on #7 and in `docs/PLAN.md` §6, §8).
@@ -73,6 +79,11 @@ continue without the conversation history.
 
 ## Next
 
+**M6 (#6): the desktop edition.** Design on #6 (D1–D5, defaults taken);
+library change (a), skipping unreadable saves, is done. Next: (b)
+`build(run_ids=[...])`, (c) a cancel hook, and `gui/`, in one PR.
+
+
 **M4 (#4): 0.1.0 on PyPI, and ck_wiki runs on it.** Needs the owner: the
 trusted publisher on PyPI, and a go before anything writes to ck_wiki.
 
@@ -91,3 +102,4 @@ Ck-parser#51 (a DLC toggled mid-run keeps a playthrough whole), so
 - 2026-09-24: M2, the core ported, free of Neo4j (#2).
 - 2026-09-24: M3, the wiki, `build()` and configuration, at parity with `poc-reference-1` (#3).
 - 2026-09-25: caught up with Ck-parser#51, a DLC toggled mid-run (grouping only; parity unchanged).
+- 2026-09-25: an unreadable save is skipped with a warning, not fatal (M6 design, D1).

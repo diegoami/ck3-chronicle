@@ -31,9 +31,10 @@ from pathlib import Path
 from typing import Callable
 
 from .config import Config
+from .core.container import UNREADABLE
 from .core.fingerprint import fingerprint
 from .core.player import primary_title_key
-from .core.runs import Run, Snapshot, scan
+from .core.runs import Run, Snapshot, scan, unreadable_reason
 from .core.snapshot import gather
 from .wiki.manifest import write_chronicle_manifest, write_root_manifest
 from .wiki.model import Wiki, build_wiki
@@ -72,6 +73,8 @@ class Result:
 
     out: Path
     chronicles: list[dict] = field(default_factory=list)
+    #: (file name, why) for every file left out because it is not a readable save
+    skipped: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def pages(self) -> int:
@@ -136,14 +139,21 @@ def read_releases(save_path: str | Path) -> dict[str, str]:
     return {k: v for k, v in loaded.items() if isinstance(v, str)} if isinstance(loaded, dict) else {}
 
 
-def discover(save_path: str | Path, run_id: str | None = None) -> list[Run]:
+def discover(
+    save_path: str | Path, run_id: str | None = None, skipped: list[tuple[str, str]] | None = None,
+) -> list[Run]:
     """The runs to build: every run in a directory, or the one run of a file.
 
-    Raises :class:`BuildError` when there is nothing to build.
+    A file in the directory that is not a readable save (an ironman save, a
+    half-written one) is left out and, with `skipped`, listed there as (file
+    name, why). Raises :class:`BuildError` when there is nothing to build.
     """
     path = Path(save_path)
     if path.is_file():
-        fp = fingerprint(path, with_sha256=False)
+        try:
+            fp = fingerprint(path, with_sha256=False)
+        except UNREADABLE as exc:
+            raise BuildError(f"cannot read {path}: {unreadable_reason(exc, path)}") from None
         return [
             Run(
                 run_id=fp.run_id,
@@ -156,8 +166,16 @@ def discover(save_path: str | Path, run_id: str | None = None) -> list[Run]:
         ]
     if not path.is_dir():
         raise BuildError(f"no such save or directory: {path}")
-    runs = scan(path, with_sha256=False)
+    unreadable: list[tuple[Path, str]] = []
+    runs = scan(path, with_sha256=False, skipped=unreadable)
+    if skipped is not None:
+        skipped.extend((file.name, why) for file, why in unreadable)
     if not runs:
+        if unreadable:
+            raise BuildError(
+                f"no readable .ck3 saves under {path}: {len(unreadable)} file(s) could not be read, "
+                + "; ".join(f"{file.name} ({why})" for file, why in unreadable)
+            )
         raise BuildError(f"no .ck3 saves under {path}")
     if run_id is not None:
         runs = [r for r in runs if r.run_id == run_id or r.slug == run_id]
@@ -179,11 +197,14 @@ def subject_of(run: Run, override: str | None, log) -> str | None:
 
 def load_run(
     run: Run, subject: str, config: Config, log, on_read: Callable[[str], None] | None = None,
+    skipped: list[tuple[str, str]] | None = None,
 ) -> Wiki | None:
     """One run's snapshots, merged into the wiki's picture of it.
 
     The build and the prose writer both start here, so the facts a paragraph
-    is written from are the facts the page is built from.
+    is written from are the facts the page is built from. A save that turns out
+    unreadable past its header (truncated, a bad zip) is left out with a
+    warning, and listed in `skipped`, like one that failed at its header.
     """
     reach = config.reach
     views = []
@@ -194,6 +215,11 @@ def load_run(
             )
         except KeyError:
             print(f"warning: {subject!r} is not in {Path(snapshot.fp.file).name}, skipped", file=log)
+        except UNREADABLE as exc:
+            name, why = Path(snapshot.fp.file).name, unreadable_reason(exc, snapshot.fp.file)
+            print(f"warning: cannot read {name}, skipped: {why}", file=log)
+            if skipped is not None:
+                skipped.append((name, why))
         if on_read is not None:
             on_read(Path(snapshot.fp.file).name)
     if not views:
@@ -208,8 +234,9 @@ def load_run(
 def build_one(
     run: Run, subject: str, out: Path, config: Config, log,
     releases: dict[str, str] | None = None, on_read: Callable[[str], None] | None = None,
+    skipped: list[tuple[str, str]] | None = None,
 ) -> dict | None:
-    wiki = load_run(run, subject, config, log, on_read)
+    wiki = load_run(run, subject, config, log, on_read, skipped)
     if wiki is None:
         return None
     prose, stale = load_prose(config.prose.dir, run.slug, wiki)
@@ -261,7 +288,10 @@ def build(
     config = config or Config()
     out = Path(out)
     stream = _LogStream(logger)
-    runs = discover(saves, run_id)
+    result = Result(out=out)
+    runs = discover(saves, run_id, result.skipped)
+    for name, why in result.skipped:
+        print(f"warning: cannot read {name}, skipped: {why}", file=stream)
     steps = sum(len(run.snapshots) + 1 for run in runs)
     done = 0
 
@@ -272,7 +302,6 @@ def build(
     releases = read_releases(saves)
     print(f"{len(runs)} run(s) to build", file=stream)
     report("start", f"{len(runs)} run(s) to build")
-    result = Result(out=out)
     for run in runs:
         subject = subject_of(run, config.subject_for(run.slug, run.run_id), stream)
         if subject is None:
@@ -285,7 +314,7 @@ def build(
             done += 1
             report("read", name, slug)
 
-        entry = build_one(run, subject, out, config, stream, releases, on_read)
+        entry = build_one(run, subject, out, config, stream, releases, on_read, result.skipped)
         done += 1
         if entry is not None:
             result.chronicles.append(entry)
@@ -329,15 +358,18 @@ def write_prose(
         settings.backend, settings.url, settings.model, os.environ.get("CK3_PROSE_API_KEY"),
         user_agent=settings.user_agent,
     )
-    runs = discover(saves, run_id)
+    skipped: list[tuple[str, str]] = []
+    runs = discover(saves, run_id, skipped)
     stream = _LogStream(logger)
+    for name, why in skipped:
+        print(f"warning: cannot read {name}, skipped: {why}", file=stream)
     status = 0
     try:
         for run in runs:
             subject = subject_of(run, config.subject_for(run.slug, run.run_id), stream)
             if subject is None:
                 continue
-            wiki = load_run(run, subject, config, stream)
+            wiki = load_run(run, subject, config, stream, skipped=skipped)
             if wiki is None:
                 continue
             pages = [("characters", c) for c in characters or ()] or rulers(wiki)

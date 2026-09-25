@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from .container import open_gamestate_text
+from .container import UNREADABLE, open_gamestate_text
 from .fingerprint import Fingerprint, fingerprint
 from .parser import Block, PushbackLines, date_key, read_top_level
 
@@ -295,17 +295,42 @@ def load_manifest(path: str | Path) -> dict[str, dict]:
     return known
 
 
-def scan(directory: str | Path, with_sha256: bool = True, manifest: str | Path | None = None) -> list[Run]:
+def scan(
+    directory: str | Path,
+    with_sha256: bool = True,
+    manifest: str | Path | None = None,
+    skipped: list[tuple[Path, str]] | None = None,
+) -> list[Run]:
+    """Every run under `directory`.
+
+    With `skipped`, a file that cannot be read as a save is left out and
+    appended to it with the reason, so one ironman or half-written save does not
+    stop a whole folder; without it, as in the POC, the error propagates.
+    """
     known = load_manifest(manifest) if manifest else {}
     snaps: list[Snapshot] = []
     for path in find_saves(directory):
-        st = path.stat()
-        prior = known.get(str(path))
-        fp = fingerprint(path, with_sha256=with_sha256 and not (prior and prior.get("size") == st.st_size))
+        try:
+            st = path.stat()
+            prior = known.get(str(path))
+            fp = fingerprint(path, with_sha256=with_sha256 and not (prior and prior.get("size") == st.st_size))
+        except UNREADABLE as exc:
+            if skipped is None:
+                raise
+            skipped.append((path, unreadable_reason(exc, path)))
+            continue
         if prior and prior.get("size") == st.st_size and fp.sha256 is None:
             fp.sha256 = prior.get("sha256")
         snaps.append(Snapshot(fp=fp, mtime=st.st_mtime))
     return group_snapshots(snaps)
+
+
+def unreadable_reason(exc: BaseException, path: str | Path) -> str:
+    """Why `path` is not a readable save, without repeating the path."""
+    if isinstance(exc, OSError):
+        return exc.strerror or type(exc).__name__
+    text = str(exc).removeprefix(f"{path}: ")
+    return text or type(exc).__name__
 
 
 def write_manifest(runs: list[Run], path: str | Path) -> None:
