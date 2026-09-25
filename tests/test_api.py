@@ -94,3 +94,39 @@ def test_the_log_stream_splits_lines_and_flushes_the_rest(caplog):
     assert [r.getMessage() for r in caplog.records] == ["one"]
     stream.flush()
     assert [(r.levelno, r.getMessage()) for r in caplog.records][-1] == (logging.WARNING, "warning: two")
+
+
+# ---------------------------------------------------------------- saves that cannot be read
+
+def test_an_unreadable_file_is_skipped_and_the_rest_built(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="ck3chronicle")
+    saves = two_snapshots(tmp_path)
+    (saves / "ironman.ck3").write_bytes(b"SAV0103\x00\x01binary tokens")
+    (saves / "half-written.ck3").write_bytes((saves / "a_1100.ck3").read_bytes()[:900])
+    result = api.build(saves, tmp_path / "site")
+    assert [c["snapshots"] for c in result.chronicles] == [2]
+    assert sorted(name for name, _ in result.skipped) == ["half-written.ck3", "ironman.ck3"]
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any(w.startswith("warning: cannot read ironman.ck3, skipped: first line") for w in warnings)
+
+
+def test_a_save_unreadable_past_its_header_is_skipped_too(tmp_path):
+    # the header and the first KB of the gamestate read fine; the parser meets
+    # a `#` comment, which a save never carries, further in
+    saves = two_snapshots(tmp_path)
+    make_save(saves / "c_1130.ck3", date="1130.1.1", seed=7, random_count=300, edits=SUCCESSION_EDITS + (
+        ('first_name="Vassal"', 'first_name="Vassal" # not in a save'),
+    ))
+    result = api.build(saves, tmp_path / "site")
+    assert result.chronicles[0]["snapshots"] == 2
+    assert [name for name, _ in result.skipped] == ["c_1130.ck3"]
+
+
+def test_nothing_readable_is_a_build_error_that_says_why(tmp_path):
+    folder = tmp_path / "saves"
+    folder.mkdir()
+    (folder / "ironman.ck3").write_bytes(b"SAV0103\x00\x01binary tokens")
+    with pytest.raises(api.BuildError, match=r"no readable \.ck3 saves .* ironman\.ck3 \(first line"):
+        api.build(folder, tmp_path / "site")
+    with pytest.raises(api.BuildError, match=r"cannot read .*ironman\.ck3: first line"):
+        api.build(folder / "ironman.ck3", tmp_path / "site")

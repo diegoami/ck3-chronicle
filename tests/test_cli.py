@@ -58,3 +58,13 @@ def test_flags_override_the_file(tmp_path):
     make_save(tmp_path / "saves" / "a.ck3")
     assert cli.main(["build", str(tmp_path / "saves"), str(tmp_path / "site")]) == 2
     assert cli.main(["build", str(tmp_path / "saves"), str(tmp_path / "site"), "--title", "k_testland"]) == 0
+
+
+def test_a_folder_with_an_unreadable_save_still_builds(tmp_path, capsys):
+    from helpers import make_save
+
+    (tmp_path / "saves").mkdir()
+    make_save(tmp_path / "saves" / "a.ck3")
+    (tmp_path / "saves" / "ironman.ck3").write_bytes(b"SAV0103\x00\x01binary tokens")
+    assert cli.main(["build", str(tmp_path / "saves"), str(tmp_path / "site"), "--title", "k_testland"]) == 0
+    assert "warning: cannot read ironman.ck3, skipped" in capsys.readouterr().err

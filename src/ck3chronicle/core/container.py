@@ -16,11 +16,12 @@ from __future__ import annotations
 import io
 import re
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
-from .parser import Block, parse_text
+from .parser import Block, FormatError, parse_text
 
 MAGIC = b"SAV0102"
 ZIP_MAGIC = b"PK\x03\x04"
@@ -29,6 +30,16 @@ GAMESTATE_MEMBER = "gamestate"
 
 class NotACk3Save(ValueError):
     pass
+
+
+#: What reading a file that is not a readable save raises: not a ``.ck3`` at
+#: all (an ironman save is binary), a truncated or half-written one, a bad
+#: zip, text that is not UTF-8 or not the save format, a file that cannot be
+#: opened. Named one by one, never ``ValueError`` wholesale, so that a bug in
+#: the code is still a crash and never passes for a skipped save.
+UNREADABLE = (
+    NotACk3Save, FormatError, UnicodeDecodeError, OSError, EOFError, zipfile.BadZipFile, zlib.error,
+)
 
 
 @dataclass

@@ -144,3 +144,23 @@ def test_runs_that_would_share_a_name_are_told_apart(tmp_path):
     # the first keeps its name; only the repeats are suffixed
     assert runs[0].run_id == runs[0].snapshots[0].fp.run_id and runs[0].slug == runs[0].snapshots[0].fp.run_slug
     assert runs[1].slug == f"{runs[0].slug}-2" and runs[2].run_id == f"{runs[0].run_id}-2"
+
+
+# ---------------------------------------------------------------- a folder with an unreadable file
+
+def test_an_unreadable_file_is_skipped_when_asked_and_fatal_otherwise(tmp_path):
+    import pytest
+
+    from ck3chronicle.core.container import NotACk3Save
+
+    make_save(tmp_path / "good.ck3")
+    (tmp_path / "ironman.ck3").write_bytes(b"SAV0103\x00\x01binary tokens")
+    skipped = []
+    (run,) = scan(tmp_path, with_sha256=False, skipped=skipped)
+    assert [s.label for s in run.snapshots] == ["good.ck3"]
+    assert [(p.name, why) for p, why in skipped] == [
+        ("ironman.ck3", "first line does not start with b'SAV0102'")
+    ]
+    # without a list to report to, the POC's behaviour: the error propagates
+    with pytest.raises(NotACk3Save):
+        scan(tmp_path, with_sha256=False)
