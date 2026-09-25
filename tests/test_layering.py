@@ -95,3 +95,22 @@ def test_the_checker_resolves_relative_imports(tmp_path, monkeypatch):
     mod.write_text("from . import parser\nfrom ..wiki import model\nimport neo4j\n", encoding="utf-8")
     monkeypatch.setattr(sys.modules[__name__], "SRC", tmp_path / PACKAGE)
     assert imports(mod) == {f"{PACKAGE}.core.parser", f"{PACKAGE}.wiki", "neo4j"}
+
+
+@pytest.mark.parametrize("path", SOURCES, ids=lambda p: module_name(p))
+def test_only_the_desktop_imports_tkinter(path):
+    # the library and the CLI must run where Tk is not installed (Linux
+    # distributions ship it apart, as python3-tk)
+    if part(module_name(path)) != "gui":
+        assert not any(m.split(".")[0] == "tkinter" for m in imports(path))
+
+
+def test_importing_the_desktop_does_not_load_tk():
+    import subprocess
+    import sys
+
+    done = subprocess.run(
+        [sys.executable, "-c", "import sys, ck3chronicle.gui, ck3chronicle.cli; print('tkinter' in sys.modules)"],
+        capture_output=True, text=True, encoding="utf-8", check=True,
+    )
+    assert done.stdout.strip() == "False"
