@@ -76,10 +76,9 @@ continue without the conversation history.
 **M4 (#4): 0.1.0 on PyPI, and ck_wiki runs on it.** Needs the owner: the
 trusted publisher on PyPI, and a go before anything writes to ck_wiki.
 
-**The POC has moved past `poc-reference-1`** (2026-09-24), and the port has
-not followed yet:
-- Ck-parser#51, a DLC toggled mid-run keeps a playthrough whole: changes
-  `core/runs.py`. A small catch-up PR, after M3.
+**The POC has moved past `poc-reference-1`** (2026-09-24). Ported since:
+Ck-parser#51 (a DLC toggled mid-run keeps a playthrough whole), so
+`core/runs.py` and `core/fingerprint.py` match the POC's `main`. Not yet:
 - Ck-parser#53 (the game's own words), #57 (culture aspects) and #59 (game
   files only for the same version): M7.
 - Ck-parser#56 ("Culture N" on the 1.3/1.4 saves) would change pages without
@@ -91,3 +90,4 @@ not followed yet:
 - 2026-09-24: M1, the skeleton (#1).
 - 2026-09-24: M2, the core ported, free of Neo4j (#2).
 - 2026-09-24: M3, the wiki, `build()` and configuration, at parity with `poc-reference-1` (#3).
+- 2026-09-25: caught up with Ck-parser#51, a DLC toggled mid-run (grouping only; parity unchanged).
