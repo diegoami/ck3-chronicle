@@ -22,6 +22,9 @@ class App:
         self.settings = settings or session.Settings.load()
         self.job: session.BuildJob | None = None
         self.rows: dict[str, session.Playthrough] = {}
+        self.scan_notice = ""  #: what the folder scan had to say
+        #: the player asked to quit during a build: close once the worker has stopped
+        self.closing = False
         root.title("CK3 Chronicle")
         root.minsize(640, 520)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -131,24 +134,25 @@ class App:
         self.settings.saves = Path(self.saves_var.get())
         self.tree.delete(*self.tree.get_children())
         self.rows = {}
+        self.scan_notice = ""
         try:
             found, skipped = session.scan_folder(self.settings.saves)
         except session.FolderProblem as problem:
-            self.notice.config(text=str(problem))
+            self.scan_notice = str(problem)
             self._refresh_buttons()
             return
         for row in found:
             self.rows[row.key] = row
             mark = UNTICKED if row.key in self.settings.unticked else TICKED
             self.tree.insert("", "end", iid=row.key, values=(mark, row.character, row.version, row.saves, row.years))
-        self.notice.config(text=(
+        self.scan_notice = (
             f"{len(skipped)} file(s) skipped, not readable as saves: "
             + ", ".join(name for name, _ in skipped[:5]) + ("…" if len(skipped) > 5 else "")
-        ) if skipped else "")
+        ) if skipped else ""
         self._refresh_buttons()
 
     def toggle(self, event=None) -> None:
-        if self.job and self.job.running:
+        if self.job is not None:
             return
         key = self.tree.focus()
         if not key:
@@ -190,15 +194,17 @@ class App:
         self.root.after(POLL_MS, self.poll)
 
     def poll(self) -> None:
-        if self.job is None:
+        job = self.job
+        if job is None:
             return
         try:
-            while True:
-                event = self.job.events.get_nowait()
-                self.handle(event)
+            # the job's last event ends it (handle() lets go of it): stop there,
+            # never ask a finished job for more (#18)
+            while self.job is job:
+                self.handle(job.events.get_nowait())
         except queue.Empty:
             pass
-        if self.job is not None and (self.job.running or not self.job.events.empty()):
+        if self.job is job:
             self.root.after(POLL_MS, self.poll)
 
     def handle(self, event: tuple) -> None:
@@ -212,6 +218,9 @@ class App:
             self._append(event[2], warning=event[1] >= logging.WARNING)
         else:
             self.job = None
+            if self.closing:
+                self._finish_close()
+                return
             if kind == "done":
                 result = event[1]
                 skipped = f", {len(result.skipped)} file(s) skipped" if result.skipped else ""
@@ -224,7 +233,7 @@ class App:
             self._refresh_buttons()
 
     def cancel(self) -> None:
-        if self.job and self.job.running:
+        if self.job is not None:
             self.job.cancel.set()
             self.status.config(text="Stopping after the current save…")
 
@@ -232,10 +241,21 @@ class App:
         session.open_chronicle(self.output_var.get())
 
     def close(self) -> None:
-        if self.job and self.job.running:
+        if self.closing:
+            return
+        if self.job is not None:
             if not messagebox.askyesno("Quit", "A build is running. Stop it and quit?", parent=self.root):
                 return
+            # stop the way Cancel does, and close only once the worker has: a
+            # chronicle being written is finished, never cut off (#21)
+            self.closing = True
             self.job.cancel.set()
+            self.status.config(text="Stopping after the current save, then closing…")
+            self._refresh_buttons()
+            return
+        self._finish_close()
+
+    def _finish_close(self) -> None:
         self.settings.saves = Path(self.saves_var.get())
         self.settings.output = Path(self.output_var.get())
         self.settings.save()
@@ -266,10 +286,13 @@ class App:
             messagebox.showinfo("Log", "No build has run yet.", parent=self.root)
 
     def _refresh_buttons(self) -> None:
-        running = bool(self.job and self.job.running)
+        running = self.job is not None
         self.build_button.config(state="disabled" if running or not self.chosen() else "normal")
-        self.cancel_button.config(state="normal" if running else "disabled")
+        self.cancel_button.config(state="normal" if running and not self.closing else "disabled")
         self.open_button.config(state="normal" if not running and session.has_chronicle(self.output_var.get()) else "disabled")
+        # why Build is off when the folder is fine but nothing is ticked (#20)
+        nothing = "Tick at least one playthrough to build it." if self.rows and not self.chosen() else ""
+        self.notice.config(text="\n".join(part for part in (self.scan_notice, nothing) if part))
 
     def _append(self, text: str, warning: bool = False) -> None:
         self.log.config(state="normal")

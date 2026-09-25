@@ -44,7 +44,7 @@ result = api.build("saves", "site", load(), progress=lambda p: print(p.step, p.s
 
 ## Desktop (Windows)
 
-Download `ck3-chronicle-<version>-windows.exe` from a
+Download `ck3-chronicle-v<version>-windows.exe` from a
 [release](https://github.com/diegoami/ck3-chronicle/releases) and run it. There
 is no installer. The window finds your save folder
 (`Documents\Paradox Interactive\Crusader Kings III\save games`) and lists the

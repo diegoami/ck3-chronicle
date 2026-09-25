@@ -2,14 +2,17 @@
 
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 
 import pytest
 
+POLL = 0.12  # a little over the window's poll interval
+
 from ck3chronicle import api
 from ck3chronicle.config import Config
-from ck3chronicle.gui import main, paths, session
+from ck3chronicle.gui import paths, session
 from helpers import SUCCESSION_EDITS, make_save
 
 
@@ -219,9 +222,9 @@ def test_smoke_opens_the_window_then_builds(tmp_path):
 def tk_root():
     """One Tk interpreter for the whole session, as the app has one per process.
 
-    On Windows a second ``Tk()`` after the first is destroyed cannot find its
-    Tcl library ("Can't find a usable init.tcl"), so every window test shares
-    this one and gets its own Toplevel.
+    CI's Windows runner (Python 3.11, uv's build) could not start a second
+    ``Tk()`` after the first was destroyed ("Can't find a usable init.tcl");
+    other Windows set-ups can. One root, a Toplevel per test, works on all.
     """
     tkinter = pytest.importorskip("tkinter")
     try:
@@ -229,6 +232,10 @@ def tk_root():
     except tkinter.TclError as exc:
         pytest.skip(f"no display for Tk: {exc}")
     root.withdraw()
+    root.callback_errors = []
+    # an exception in a Tk callback is printed and swallowed by default, so a
+    # test would pass over it (#18): collect them instead
+    root.report_callback_exception = lambda kind, value, tb: root.callback_errors.append(value)
     yield root
     root.destroy()
 
@@ -237,6 +244,7 @@ def tk_root():
 def root(tk_root):
     import tkinter
 
+    tk_root.callback_errors.clear()
     window = tkinter.Toplevel(tk_root)
     window.withdraw()
     yield window
@@ -244,6 +252,16 @@ def root(tk_root):
         window.destroy()
     except tkinter.TclError:
         pass  # the test closed it
+    assert tk_root.callback_errors == [], "an exception was raised in a Tk callback"
+
+
+def pump(root, until, timeout=60):
+    """Run the event loop until `until()` holds, as mainloop would."""
+    deadline = time.time() + timeout
+    while not until() and time.time() < deadline:
+        root.update()
+        time.sleep(0.02)
+    assert until()
 
 
 def test_the_window_lists_ticks_builds_and_opens(tmp_path, root, monkeypatch):
@@ -269,12 +287,12 @@ def test_the_window_lists_ticks_builds_and_opens(tmp_path, root, monkeypatch):
     window.tree.focus(second)
     window.toggle()
     assert window.chosen() == [window.tree.get_children()[0]]
+    assert "Tick at least one" not in window.notice.cget("text")
     window.build()
-    deadline = time.time() + 60
-    while window.job is not None and time.time() < deadline:
+    pump(root, lambda: window.job is None)
+    for _ in range(5):  # a poll scheduled after the last event must find nothing to do
         root.update()
-        time.sleep(0.02)
-    assert window.job is None
+        time.sleep(POLL)
     assert window.status.cget("text").startswith("Done: 1 chronicle(s)")
     assert str(window.open_button.cget("state")) == "normal"
     window.open()
@@ -294,3 +312,67 @@ def test_an_empty_folder_says_so_in_the_window(tmp_path, root, monkeypatch):
     window = app.App(root, session.Settings(tmp_path / "empty", tmp_path / "out"))
     assert "no Crusader Kings III saves" in window.notice.cget("text")
     assert str(window.build_button.cget("state")) == "disabled"
+
+
+def test_unticking_everything_says_why_build_is_off(tmp_path, root, monkeypatch):
+    # #20
+    from ck3chronicle.gui import app
+
+    monkeypatch.setattr(paths, "settings_path", lambda **kw: tmp_path / "desktop.json")
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    make_save(saves / "a.ck3")
+    window = app.App(root, session.Settings(saves, tmp_path / "out"))
+    window.tree.focus(window.tree.get_children()[0])
+    window.toggle()
+    assert str(window.build_button.cget("state")) == "disabled"
+    assert window.notice.cget("text") == "Tick at least one playthrough to build it."
+    window.toggle()
+    assert window.notice.cget("text") == "" and str(window.build_button.cget("state")) == "normal"
+
+
+def test_quitting_during_a_build_waits_for_the_worker(tmp_path, root, monkeypatch):
+    # #21: the worker stops at its next step, and only then does the window close
+    from ck3chronicle.gui import app
+
+    monkeypatch.setattr(paths, "settings_path", lambda **kw: tmp_path / "desktop.json")
+    monkeypatch.setattr(paths, "config_path", lambda **kw: tmp_path / "none.toml")
+    monkeypatch.setattr(paths, "log_path", lambda **kw: tmp_path / "last-build.log")
+    monkeypatch.setattr(app.messagebox, "askyesno", lambda *a, **k: True)
+    gate = threading.Event()
+    stopped = []
+
+    def blocked_build(*args, cancel=None, **kwargs):
+        gate.wait(30)
+        stopped.append(cancel.is_set())
+        raise api.Cancelled("stopped")
+
+    monkeypatch.setattr(session.api, "build", blocked_build)
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    make_save(saves / "a.ck3")
+    window = app.App(root, session.Settings(saves, tmp_path / "out"))
+    window.build()
+    job = window.job
+    window.close()
+    assert job.cancel.is_set() and job.running
+    assert root.winfo_exists()  # still open: the worker has not stopped yet
+    gate.set()
+    pump(root, lambda: not root.winfo_exists())
+    assert stopped == [True] and not job.running
+    assert json.loads((tmp_path / "desktop.json").read_text(encoding="utf-8"))["saves"] == str(saves)
+
+
+def test_a_save_without_a_date_is_listed_not_fatal(tmp_path):
+    # #19: a readable save can lack both its dates
+    import re
+
+    from ck3chronicle.core.container import write_save
+    from helpers import fixture_text, split_meta
+
+    text = re.sub(r"^\tmeta_date=.*\n", "", fixture_text(), flags=re.M)
+    text = re.sub(r"^date=.*\n", "", text, flags=re.M)
+    (tmp_path / "saves").mkdir()
+    write_save(tmp_path / "saves" / "nodate.ck3", *split_meta(text))
+    (row,), _ = session.scan_folder(tmp_path / "saves")
+    assert row.years == "?" and row.saves == 1

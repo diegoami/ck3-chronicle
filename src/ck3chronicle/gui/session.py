@@ -47,7 +47,8 @@ class Playthrough:
     @classmethod
     def of(cls, run: Run) -> "Playthrough":
         first, newest = run.snapshots[0].fp, run.snapshots[-1].fp
-        start, end = (fp.date.split(".", 1)[0] for fp in (first, newest))
+        # a save can lack its date (#19): the list says so rather than fail
+        start, end = (fp.date.split(".", 1)[0] if fp.date else "?" for fp in (first, newest))
         return cls(
             key=run.slug,
             character=newest.player_name or "(unknown ruler)",
