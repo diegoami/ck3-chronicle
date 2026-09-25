@@ -33,9 +33,17 @@ Issues = "https://github.com/diegoami/ck3-chronicle/issues"
 [project.scripts]
 ck3chronicle = "ck3chronicle.cli:main"
 
+[project.gui-scripts]
+# no console window on Windows
+ck3chronicle-gui = "ck3chronicle.gui:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8",
+]
+# builds the Windows .exe (CI); never a runtime dependency
+desktop = [
+    "pyinstaller>=6.10",
 ]
 
 [build-system]

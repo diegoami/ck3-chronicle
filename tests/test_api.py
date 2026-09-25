@@ -130,3 +130,42 @@ def test_nothing_readable_is_a_build_error_that_says_why(tmp_path):
         api.build(folder, tmp_path / "site")
     with pytest.raises(api.BuildError, match=r"cannot read .*ironman\.ck3: first line"):
         api.build(folder / "ironman.ck3", tmp_path / "site")
+
+
+# ---------------------------------------------------------------- choosing runs, cancelling
+
+def three_runs(tmp_path):
+    saves = tmp_path / "saves"
+    saves.mkdir()
+    for seed in (1, 2, 3):
+        make_save(saves / f"run{seed}.ck3", seed=seed, random_count=100)
+    return saves
+
+
+def test_chosen_runs_are_built_into_one_landing_page(tmp_path):
+    saves = three_runs(tmp_path)
+    slugs = [r.slug for r in api.discover(saves)]
+    result = api.build(saves, tmp_path / "site", run_ids=[slugs[0], slugs[2]])
+    assert [c["slug"] for c in result.chronicles] == [slugs[0], slugs[2]]
+    landing = (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
+    assert slugs[0] in landing and slugs[2] in landing and slugs[1] not in landing
+    with pytest.raises(api.BuildError, match="none of the chosen runs"):
+        api.build(saves, tmp_path / "site", run_ids=["nope"])
+
+
+def test_a_cancelled_build_stops_at_its_next_step(tmp_path):
+    import threading
+
+    saves = three_runs(tmp_path)
+    cancel = threading.Event()
+    seen = []
+
+    def progress(p):
+        seen.append(p.stage)
+        if p.stage == "write":
+            cancel.set()  # after the first chronicle
+
+    with pytest.raises(api.Cancelled):
+        api.build(saves, tmp_path / "site", progress=progress, cancel=cancel)
+    assert seen == ["start", "read", "write"]
+    assert not (tmp_path / "site" / "index.html").exists()  # no landing page for half a build

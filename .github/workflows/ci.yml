@@ -45,3 +45,32 @@ jobs:
           uv pip install --python "$RUNNER_TEMP/wheel-env" dist/*.whl
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/wheel-env/bin/ck3chronicle" --version
+
+  desktop:
+    # the Windows .exe (docs/PLAN.md §2): built, then run headless on a save
+    # made from the fixture, so a missing module or a missing Tk fails here and
+    # not on a player's machine. The artifact is there to try any PR's build.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --group dev --group desktop
+      - name: Build the .exe
+        run: >
+          uv run pyinstaller --noconfirm --onefile --windowed
+          --name ck3-chronicle-windows --copy-metadata ck3-chronicle
+          packaging/desktop.py
+      - name: Run it headless on a fixture save
+        shell: pwsh
+        run: |
+          uv run python -c "import sys; sys.path.insert(0, 'tests'); from pathlib import Path; from helpers import make_save; Path('smoke/saves').mkdir(parents=True); make_save(Path('smoke/saves/a.ck3'))"
+          $run = Start-Process -FilePath dist/ck3-chronicle-windows.exe -ArgumentList '--smoke', 'smoke/saves', 'smoke/site' -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "the .exe exited with $($run.ExitCode)" }
+          if (-not (Test-Path smoke/site/index.html)) { throw "the .exe wrote no chronicle" }
+          "size: {0:N1} MB" -f ((Get-Item dist/ck3-chronicle-windows.exe).Length / 1MB)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ck3-chronicle-windows
+          path: dist/ck3-chronicle-windows.exe

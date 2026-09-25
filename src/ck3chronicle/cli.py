@@ -4,6 +4,7 @@
     ck3chronicle fetch [DEST]               # the saves on a repository's Releases
     ck3chronicle queue ids|collect ...      # the harvest queue, for the companion
     ck3chronicle prose SAVES                # paragraphs for the rulers' pages
+    ck3chronicle gui                        # the desktop window
 
 Settings come from ``ck3chronicle.toml`` (``--config``, else the working
 directory's, else the defaults); a flag overrides the file. Reports go to
@@ -89,6 +90,8 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument("--model", help="model name, as the server knows it (default: $CK3_PROSE_MODEL, else [prose] model)")
     pr.add_argument("--force", action="store_true", help="rewrite prose that is still current")
     pr.add_argument("--cache", type=Path, help="character digests, as for the build")
+
+    sub.add_parser("gui", help="open the desktop window")
     return p
 
 
@@ -194,6 +197,11 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"ck3chronicle: {exc}", file=sys.stderr)
         return 2
+
+    if args.command == "gui":
+        from .gui import main as gui_main
+
+        return gui_main([])
 
     if args.command == "build":
         try:

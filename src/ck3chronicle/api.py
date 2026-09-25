@@ -28,7 +28,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Collection
 
 from .config import Config
 from .core.container import UNREADABLE
@@ -46,6 +46,14 @@ logger = logging.getLogger("ck3chronicle")
 
 class BuildError(Exception):
     """Nothing could be built: no saves, no such run, or no chronicle came of it."""
+
+
+class Cancelled(Exception):
+    """The build was asked to stop, and stopped at its next step.
+
+    What was already written stays: a chronicle finished before the request is
+    whole, the landing page is not rewritten.
+    """
 
 
 @dataclass(frozen=True)
@@ -279,17 +287,27 @@ def build(
     progress: ProgressCallback | None = None,
     *,
     run_id: str | None = None,
+    run_ids: Collection[str] | None = None,
+    cancel=None,
 ) -> Result:
     """Build every chronicle the saves hold into `out`.
 
-    `saves` is a directory of saves or one save; `run_id` builds only that run
-    (its id or slug). Raises :class:`BuildError` when nothing can be built.
+    `saves` is a directory of saves or one save. `run_id` builds only that run,
+    `run_ids` only those (each an id or a slug), in one landing page. `cancel`
+    is anything with ``is_set()`` (a :class:`threading.Event`): once set, the
+    build raises :class:`Cancelled` at its next step, between two saves at
+    worst. Raises :class:`BuildError` when nothing can be built.
     """
     config = config or Config()
     out = Path(out)
     stream = _LogStream(logger)
     result = Result(out=out)
     runs = discover(saves, run_id, result.skipped)
+    if run_ids is not None:
+        wanted = set(run_ids)
+        runs = [r for r in runs if r.run_id in wanted or r.slug in wanted]
+        if not runs:
+            raise BuildError(f"none of the chosen runs is under {saves}")
     for name, why in result.skipped:
         print(f"warning: cannot read {name}, skipped: {why}", file=stream)
     steps = sum(len(run.snapshots) + 1 for run in runs)
@@ -298,6 +316,9 @@ def build(
     def report(stage: str, message: str, run: str | None = None) -> None:
         if progress is not None:
             progress(Progress(stage, message, done, steps, run))
+        if cancel is not None and cancel.is_set() and stage != "done":
+            stream.flush()
+            raise Cancelled(f"cancelled after {done} of {steps} steps")
 
     releases = read_releases(saves)
     print(f"{len(runs)} run(s) to build", file=stream)
