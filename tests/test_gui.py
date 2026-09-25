@@ -194,8 +194,8 @@ def test_smoke_builds_without_a_window(tmp_path, monkeypatch):
         import tkinter
 
         tkinter.Tk().destroy()
-    except tkinter.TclError:
-        pytest.skip("no display for Tk")
+    except tkinter.TclError as exc:
+        pytest.skip(f"no display for Tk: {exc}")
     saves = saves_folder(tmp_path)
     assert main(["--smoke", str(saves), str(tmp_path / "out")]) == 0
     assert (tmp_path / "out" / "index.html").is_file()
@@ -210,8 +210,8 @@ def root():
     tkinter = pytest.importorskip("tkinter")
     try:
         window = tkinter.Tk()
-    except tkinter.TclError:
-        pytest.skip("no display for Tk")
+    except tkinter.TclError as exc:
+        pytest.skip(f"no display for Tk: {exc}")
     window.withdraw()
     yield window
     try:
